@@ -1,0 +1,672 @@
+---
+title: "Analytics Project"
+output: pdf_document
+---
+
+
+**Your Name**: IWAN
+**Your G Number**: G01236399
+
+
+
+```{r warning = FALSE, message = FALSE}
+# Suppress dplyr summarise grouping warning messages
+options(dplyr.summarise.inform = FALSE)
+
+## Add R libraries here
+library(tidyverse)
+library(tidymodels)
+library(vip)
+library(rpart.plot)
+
+# Load data
+loans_df <- read_rds(url('https://gmubusinessanalytics.netlify.app/data/loan_data.rds'))
+
+```
+
+
+
+# Data Analysis [50 Points]
+
+In this section, you must think of at least 5 relevant questions that explore the relationship between `loan_default` and the other variables in the `loan_df` data set. The goal of your analysis should be discovering which variables drive the differences between customers who do and do not default on their loans.
+
+You must answer each question and provide supporting data summaries with either a summary data frame (using `dplyr`/`tidyr`) or a plot (using `ggplot`) or both.
+
+In total, you must have a minimum of 3 plots (created with `ggplot`) and 3 summary data frames (created with `dplyr`) for the exploratory data analysis section. Among the plots you produce, you must have at least 3 different types (ex. box plot, bar chart, histogram, scatter plot, etc...)
+
+See the example question below.
+
+
+**Note**: To add an R code chunk to any section of your project, you can use the keyboard shortcut `Ctrl` + `Alt` + `i` or the `insert` button at the top of your R project template notebook file.
+
+
+## Sample Question
+
+**Are there differences in loan default rates by loan purpose?**
+
+**Answer**: Yes, the data indicates that credit card and medical loans have significantly larger default rates than any other type of loan. In fact, both of these loan types have default rates at more than 50%. This is nearly two times the average default rate for all other loan types.
+
+
+### Summary Table
+
+```{r echo = TRUE, fig.height=5, fig.width=9}
+loans_df %>%
+  group_by(loan_purpose) %>% 
+  summarise(n_customers = n(),
+            customers_default = sum(loan_default == 'yes'),
+            default_percent = 100 * mean(loan_default == 'yes'))
+```
+
+
+### Data Visulatization
+
+```{r echo = TRUE, fig.height=5, fig.width=9}
+default_rates <- loans_df %>%
+                 group_by(loan_purpose) %>% 
+                 summarise(n_customers = n(),
+                 customers_default = sum(loan_default == 'yes'),
+                 default_percent = 100 * mean(loan_default == 'yes'))
+
+
+ggplot(data = default_rates, 
+       mapping = aes(x = loan_purpose, 
+                     y = default_percent)) +
+    geom_bar(stat = 'identity', 
+             fill = '#006EA1', 
+             color = 'white') +
+    labs(title = 'Loan Default Rate by Purpose of Loan',
+         x = 'Loan Purpose',
+         y = 'Default Percentage') +
+    theme_light()
+```
+
+
+
+
+
+# Question 1
+
+
+**Question**:
+Are there differences in loan default rates by term?
+
+**Answer**:
+Yes, there are difference in it. It precisely shown by the plot that the percentage of loan default in five years term has the higher rate compared to the three years term. However, the non default customers is likely to happen to happen in the three years term instead of in the five years term.
+
+```{r}
+default_rates2_1 <- loans_df %>%
+  group_by(term, loan_default) %>%
+  summarise(n_customers = n()) %>%
+  mutate(percentage = (n_customers/sum(n_customers)) * 100)
+default_rates2_1
+
+ggplot(data = default_rates2_1, 
+       mapping = aes(x = term, 
+                     y = n_customers, 
+                     fill = loan_default)) +
+  geom_bar(stat = 'identity') +
+  geom_text(aes(label = round(percentage, 
+                              digits = 2)), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(title = 'Loan Default Rate by Term',
+       x = 'Term',
+       y = 'Number of Customers') +
+  theme_light()
+```
+
+
+
+# Question 2
+
+
+**Question**:
+Are there differences in loan default rates by current_job_years?
+
+**Answer**:
+Yes, there are differences. It can clearly be exaplained by the line plot that the customers, which have the current job years in the middle year from 4 to 7 years, are likely not to default in the loan payment. However, there is a significant number of loan default customer spike for the customers in 8 years of work duration. It automatically explains that the most number of customers who likely to default in loan payment are customers which have the 8 years duration in current job years.
+
+```{r}
+default_rates3 <- loans_df %>%
+  group_by(current_job_years = as.factor(loans_df$current_job_years)) %>%
+  summarise(n_customers = n(),
+            customers_default = sum(loan_default == 'yes')) %>%
+  mutate(default_percent = (customers_default/n_customers) * 100)
+default_rates3
+
+ggplot(data = default_rates3, 
+       mapping = aes(x = current_job_years, 
+                     y = default_percent, 
+                     group = 1)) +
+  geom_line(color = "#0072B2") +
+  geom_point(color = "#0072B2") +
+  labs(title = "Line Plot of Default Percentage by Current Job Years",
+       x = "Current Job Years", 
+       y = "Default Percent") +
+  theme_light()
+```
+
+
+# Question 3
+
+
+**Question**:
+Do the default customers have the higher median of Loan Amount?
+
+**Answer**:
+Yes, they do. The boxplot shows that the loan default has the higher median than the non default one. It can be conluded that the customers which likely to have the loan default status have the higher exposure of loan amount instead of the non default customer.
+
+```{r}
+ggplot(data = loans_df, 
+       mapping = aes(x = loan_default, 
+                     y = loan_amount, 
+                     fill = loan_default)) +
+  geom_boxplot() + 
+  labs(title = "Boxplot of loan amount by loan default",
+       x = "Loan Default", 
+       y = "Loan Amount")
+```
+
+
+
+# Question 4
+
+
+**Question**:
+Are there dfferences in loan default based on the customers installment range?
+
+**Answer**:
+Yes, there are. According to the installment range, it shows something interesting. The the loan default customers are likely to spike as the installment amount are getting higher. However, the non default percent of the customers are getting lower as the installment range are getting lower. Still, the average percentage of the loan default is lower than the non default customers.
+
+```{r}
+installment_differences <- loans_df %>%
+  mutate(installment_range = cut(installment,
+                                 breaks = c(0, 
+                                            275.00, 
+                                            422.00, 
+                                            490.00, 
+                                            664.00, 
+                                            1566.59),
+                                 labels = c("0 - 275.00", 
+                                            "275.01 - 422.00", 
+                                            "422.01 - 490.00", 
+                                            "490.01 - 664.00", 
+                                            "664.01 - 1566.59"))) %>%
+  group_by(installment_range) %>%
+  summarise(n_customer = n(),
+            customer_default = sum(loan_default == 'yes'),
+            customer_non_default = sum(loan_default == 'no'))%>%
+  mutate(default_percent = (customer_default/n_customer) * 100,
+         non_default_percent = (customer_non_default/n_customer) * 100)
+installment_differences
+
+#preparation for the plot
+df_installment_differences <- installment_differences %>%
+  select(installment_range, 
+         default_percent, 
+         non_default_percent) %>%
+  gather(key = "variable", 
+         value = "value", 
+         -installment_range)
+
+#plot the loan default based on the range installment
+ggplot(df_installment_differences, 
+       aes(x = installment_range, 
+           y = value, 
+           group = variable, 
+           color = variable)) + 
+  geom_line() +
+  geom_point(color="violetred") +
+  facet_wrap(~ variable, ncol = 1) +
+  labs(title = "Line Plot of Default Percentage by Installment Range",
+       x = "Installment Range", 
+       y = "Percentage (%)") +
+  theme_light()
+```
+
+
+
+# Question 5
+
+
+**Question**:
+Are there differences in loan default rates by homeownership?
+
+**Answer**:
+Yes, there are. According to summary, the customers, whose home ownership status is "rent", have the higher percentage of the "mortgage" and the "own" status. Therefore, it can be concluded that the customers, who are renting house to live, have tendency to have the loan default status.
+
+```{r}
+loans_df %>%
+  group_by(homeownership) %>%
+  summarise(n_customers = n(),
+            customers_default = sum(loan_default == 'yes')) %>%
+  mutate(default_percent = (customers_default/n_customers) * 100)
+```
+
+
+
+
+# Predictive Modeling [75 Points]
+
+
+In this section of the project, you will fit **two classification algorithms** to predict the response variable,`loan_default`. You should use all of the other variables in the `loans_df` data as predictor variables for each model.
+
+You must follow the machine learning steps below. 
+
+The data splitting and feature engineering steps should only be done once so that your models are using the same data and feature engineering steps for training.
+
+- Split the `loans_df` data into a training and test set (remember to set your seed)
+- Specify a feature engineering pipeline with the `recipes` package
+    - You can include steps such as skewness transformation, dummy variable encoding or any other steps you find appropriate
+- Specify a `parsnip` model object
+    - You may choose from the following classification algorithms:
+      - Logistic Regression
+      - LDA
+      - QDA
+      - KNN
+      - Decision Tree
+      - Random Forest
+- Package your recipe and model into a workflow
+- Fit your workflow to the training data
+    - If your model has hyperparameters:
+      - Split the training data into 5 folds for 5-fold cross validation using `vfold_cv` (remember to set your seed)
+      - Perform hyperparamter tuning with grid search using the `grid_regular()` function 
+      - Hyperparameter tuning can take a significant amount of computing time. To minimize this, use a maximum of 3 levels within your `grid_regular()` function
+      - Select the best model with `select_best()` and finalize your workflow
+- Evaluate model performance on the test set by plotting an ROC curve using `autoplot()` and calculating the area under the ROC curve on your test data
+
+
+# Split the 'loans_df' data into a training and test set (remember to set your seed)
+
+```{r}
+#1. Split the `loans_df` data into a training and test set (remember to set your seed)
+#---------------------------------------------------------------------------------------
+set.seed(4500)
+loans_split <- initial_split(loans_df, prop = 0.75, 
+                             strata = loan_default)
+
+loans_training <- loans_split %>% training()
+loans_test <- loans_split %>% testing()
+```
+
+# Specify a feature engineering pipeline
+
+```{r}
+#2. Specify a feature engineering pipeline with the `recipes` package
+#---------------------------------------------------------------------------------------
+loans_recipe <- recipe(loan_default ~ ., 
+                       data = loans_training) %>% 
+  step_YeoJohnson(all_numeric(),
+                  -all_outcomes()) %>% 
+  step_normalize(all_numeric(), 
+                 -all_outcomes()) %>% 
+  step_dummy(all_nominal(), 
+             -all_outcomes())
+
+loans_recipe %>% 
+  prep() %>% 
+  bake(new_data = loans_training)
+```
+
+
+# Model 1
+
+```{r}
+#3. Specify a `parsnip` model object
+#---------------------------------------------------------------------------------------
+# Model Specification
+#---------------------------------------------------------------------------------------
+# Logistic Regression
+#---------------------------------------------------------------------------------------
+logistic_model <- logistic_reg() %>% 
+  set_engine('glm') %>% 
+  set_mode('classification')
+logistic_model
+
+#4. Package your recipe and model into a workflow
+#---------------------------------------------------------------------------------------
+# Create a Workflow for logistic regression
+#---------------------------------------------------------------------------------------
+loans_wf <- workflow() %>% 
+  add_model(logistic_model) %>% 
+  add_recipe(loans_recipe)
+loans_wf
+
+#5. Fit your workflow to the training data
+#---------------------------------------------------------------------------------------
+# Fit the Model to the logistic regression model
+#---------------------------------------------------------------------------------------
+# Fit the workflow to the training data
+loans_logistic_fit <- loans_wf %>% 
+  fit(data = loans_training)
+loans_logistic_fit
+
+# Exploring our Trained Model
+# Extract the trained model from our workflow fit
+loans_trained_model <- loans_logistic_fit %>% 
+  pull_workflow_fit()
+loans_trained_model
+
+# Variable Importance
+vip(loans_trained_model)
+
+# Predicted Categories
+predictions_categories <- predict(loans_logistic_fit, 
+                                  new_data = loans_test)
+predictions_categories
+
+# obtain the estimated probabilities for each category of our response variable
+predictions_probabilities <- predict(loans_logistic_fit, 
+                                     new_data = loans_test, 
+                                     type = 'prob')
+predictions_probabilities
+
+# combine the results from the Predicted Categories and  the estimated probabilities with the true response variable values in our test data set
+test_results <- loans_test %>% 
+  select(loan_default) %>% 
+  bind_cols(predictions_categories) %>% 
+  bind_cols(predictions_probabilities)
+test_results
+
+#6. Evaluate model performance on the test set by plotting an ROC curve using `autoplot()` and calculating the area under the ROC curve on your test data
+#---------------------------------------------------------------------------------------
+# Evaluate the logistic regression model
+#---------------------------------------------------------------------------------------
+# Exploring Performance Metrics
+# Confusion Matrix
+conf_mat(test_results, 
+         truth = loan_default, 
+         estimate = .pred_class)
+
+# F1 Score
+f_meas(test_results, 
+       truth = loan_default, 
+       estimate = .pred_class)
+
+# ROC Curve
+roc_curve(test_results, 
+          truth = loan_default, 
+          estimate = .pred_yes)
+
+# plot the ROC Curve
+roc_curve(test_results, 
+          truth = loan_default, 
+          estimate = .pred_yes) %>% 
+  autoplot()
+
+# Area Under the ROC Curve
+roc_auc(test_results, 
+        truth = loan_default, .pred_yes)
+
+# Creating Custom Metric Sets
+# calculate the accuracy and F1 from my results data frame
+my_metrics <- metric_set(accuracy, 
+                         f_meas)
+my_metrics(test_results, 
+           truth = loan_default, 
+           estimate = .pred_class)
+
+# Automating the Process
+last_fit_model <- loans_wf %>% 
+  last_fit(split = loans_split)
+last_fit_model
+
+#obtain the metrics on the test set (accuracy and roc_auc by default)
+last_fit_model %>% 
+  collect_metrics()
+
+# obtain a data frame with test set results
+last_fit_results <- last_fit_model %>% 
+  collect_predictions()
+last_fit_results
+
+# make an ROC plot
+last_fit_results %>% 
+  roc_curve(truth = loan_default, 
+            estimate = .pred_yes) %>% 
+  autoplot()
+```
+
+
+
+
+
+
+# Model 2
+
+```{r}
+#---------------------------------------------------------------------------------------
+#3. Specify a `parsnip` model object
+#---------------------------------------------------------------------------------------
+# Model Specification
+#---------------------------------------------------------------------------------------
+# Decision Trees
+#---------------------------------------------------------------------------------------
+tree_model <- decision_tree(cost_complexity = tune(),
+                            tree_depth = tune(),
+                            min_n = tune()) %>%
+  set_engine('rpart') %>% 
+  set_mode('classification')
+tree_model
+
+#4. Package your recipe and model into a workflow
+#---------------------------------------------------------------------------------------
+# Create a Workflow for decission tree
+#---------------------------------------------------------------------------------------
+tree_workflow <- workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(loans_recipe)
+tree_workflow
+
+# Create a grid of hyperparameter values to test
+tree_grid <- grid_regular(cost_complexity(),
+                          tree_depth(),
+                          min_n(), 
+                          levels = 3)
+
+# View grid
+tree_grid
+
+# Create folds for cross validation on the training data set
+## These will be used to tune model hyperparameters
+set.seed(4500)
+loans_folds <- vfold_cv(loans_training, v = 5)
+loans_folds
+
+## Tune decision tree workflow
+set.seed(4500)
+tree_tuning <- tree_workflow %>% 
+  tune_grid(resamples = loans_folds,
+            grid = tree_grid)
+tree_tuning
+
+## Show the top 5 best models based on roc_auc metric
+tree_tuning %>% show_best('roc_auc')## Select best model based on roc_auc
+best_tree <- tree_tuning %>% 
+  select_best(metric = 'roc_auc')
+
+# View the best tree parameters
+best_tree
+
+# Finalize Workflow
+final_tree_workflow <- tree_workflow %>% 
+  finalize_workflow(best_tree)
+final_tree_workflow
+
+#5. Fit your workflow to the training data
+#---------------------------------------------------------------------------------------
+# Fit the Model to the decission tree model
+#---------------------------------------------------------------------------------------
+# Fit the workflow to the training data
+tree_wf_fit <- final_tree_workflow %>% 
+  fit(data = loans_training)
+tree_wf_fit
+
+# Exploring our Trained Model
+# Extract the trained model from our workflow fit
+tree_fit <- tree_wf_fit %>% 
+  pull_workflow_fit()
+tree_fit
+
+# The variable importance scores from the model
+vip(tree_fit)
+
+# Predicted Categories
+tree_predictions_categories <- predict(tree_wf_fit, 
+                                       new_data = loans_test)
+tree_predictions_categories
+
+# obtain the estimated probabilities for each category of our response variable
+tree_predictions_probabilities <- predict(tree_wf_fit, 
+                                          new_data = loans_test, 
+                                          type = 'prob')
+tree_predictions_probabilities
+
+# combine the results from the Predicted Categories and  the estimated probabilities with the true response variable values in our test data set
+tree_test_results <- loans_test %>% 
+  select(loan_default) %>% 
+  bind_cols(tree_predictions_categories) %>% 
+  bind_cols(tree_predictions_probabilities)
+tree_test_results
+
+# Decision Tree Plot
+rpart.plot(tree_fit$fit, 
+           roundint = FALSE)
+
+#6. Evaluate model performance on the test set by plotting an ROC curve using `autoplot()` and calculating the area under the ROC curve on your test data
+#---------------------------------------------------------------------------------------
+# Evaluate the decission tree model
+#---------------------------------------------------------------------------------------
+# Exploring Performance Metrics
+# Confusion Matrix
+conf_mat(tree_test_results, 
+         truth = loan_default, 
+         estimate = .pred_class)
+
+# F1 Score
+f_meas(tree_test_results, 
+       truth = loan_default, 
+       estimate = .pred_class)
+
+# ROC Curve
+roc_curve(tree_test_results, 
+          truth = loan_default, 
+          estimate = .pred_yes)
+
+# plot the ROC Curve
+roc_curve(tree_test_results, 
+          truth = loan_default, 
+          estimate = .pred_yes) %>% 
+  autoplot()
+
+# Area Under the ROC Curve
+roc_auc(tree_test_results, 
+        truth = loan_default, .pred_yes)
+
+# Creating Custom Metric Sets
+# calculate the accuracy and F1 from my results data frame
+my_metrics_tree <- metric_set(accuracy, 
+                              f_meas)
+my_metrics_tree(tree_test_results, 
+                truth = loan_default, 
+                estimate = .pred_class)
+
+# Automating the Process
+tree_last_fit <- final_tree_workflow %>% 
+  last_fit(loans_split)
+tree_last_fit
+
+#obtain the metrics on the test set (accuracy and roc_auc by default)
+tree_last_fit %>% 
+  collect_metrics()
+
+# obtain a data frame with test set results
+tree_last_fit_results <- tree_last_fit %>% 
+  collect_predictions()
+tree_last_fit_results
+
+# plot the ROC curve to visualize test set performance of the tuned decision tree
+tree_last_fit_results %>% 
+  roc_curve(truth  = loan_default, 
+            estimate = .pred_yes) %>% 
+  autoplot()
+```
+
+
+
+
+
+
+# Summary of Results [25 Points]
+
+Write a summary of your overall findings and recommendations to the executives at the bank. Think of this section as your closing remarks of a presentation, where you summarize your key findings, model performance, and make recommendations to improve loan processes at the bank. 
+
+Your summary should include:
+
+- Key findings from your data analysis. What were the things that stuck out for you in this section and why are they important?
+- Your “best” classification model and an analysis of its performance. 
+  - In this section you should talk about the expected error of your model on future data. 
+  - You should discuss at least one performance metric, such as an F1 or ROC AUC for your model. However, you must explain the results in an intuitive, non-technical manner. Your audience in this case are executives at a bank with limited knowledge of machine learning.
+- Your recommendations to the bank – how can financial losses from default be reduced?
+
+
+
+
+**Summary**
+
+The main thing that can be concluded by the data analysis part is that the number of the total number of the non default customer is higher than the loan default customer. Therefore, problem might occur if there is a special rare case for the loan default customer appears. Other than that, there is some predictors which would suppose to be better if provided by a set fix of value or factor instead of being the numeric type. For an instance, the interest rate which might be better to be replaced by type of loan product so that the difference between the interest rate and the loan default can be easily found since each loan product should usually has a fix interest rate. Also, information about loan collectibilty should be provided as well in the dataset because the relationship with the loan default is usually strong.
+
+The classifications models, which are used to predict the loan default customer, are logistic regression and decission tree. Those two models are tested through the test set which were obtained from the first split at beginning. The number of row for the test set is 1027. Therefore, the two models are tested by using the same 1027 rows dataset.
+
+Firstly, we will explore the performance thorugh the confusion metric. Respectively, the confusion metric of the first and the second model are such the follows:
+
+- logistic regression:
+          Truth
+Prediction yes  no
+       yes 354  16
+       no   28 629
+       
+- decission tree
+          Truth
+Prediction yes  no
+       yes 330  28
+       no   52 617
+       
+According to the first confusion metric result, we can see that there are 983 rows out of 1027 have the right prediction. Specifically, in that 983 rows, there 354 rows of the customers loan default have the same value with the predicted value and there are 629 of the non default customers have the same value with the predicted value. However, there are 44 rows which are missed predicted since the actual values are different to the predicted value. Therefore, according to such confusion metric, we can conclude that the accuracy of this model is 95%.
+
+HOwever, according to the second confusion metric, we can calculate that the accuracy of the model is 92%. Therefore, the accuracy of the second model, which is the decision tree model, based on the confusion metric, is not as good as the first model. Yet, the difference of the two wrong predicted values of the second model are quite signifinicant, which are 52 and 28. Therefore, the F1 score should be calculated in order to support the performance measurement of the second model. 
+
+According to the both accuracy, the expected error from the test set respectively of those two models are 0.043 and 0.078. In other words, the tendecy of the logistic regression model to yield the error result is 4.3% and the decision tree is 7.8%. Therefore, the logistic regression still has the smaller chance to gain error results while predicting whether the customer tend to be default or non default in loan payment.
+
+Secondly, we explore the F1 score that serves as the performance metric which balances the missed predicted values including the customers which are wrongly predicted as the loan default or the non default status. Respectively, the F1 score of the first model and second model while tested by using the test set is such the follows:
+
+- logistic regression:
+f_meas	binary	0.9414894	
+
+- decission tree:
+f_meas	binary	0.8918919	
+
+According to number of missed predicted value in the confusion metric of the first model above, the difference between false positive, which is the worng prediction for the default customer, and the false negative, which is the total number of the wrong prediction for the non default custemer, are not significantly different, using the accuracy 95% accuracy as the performance measurement is still okay. Even though, according to the F1 score, the performance value is still very good, which is 0.94, since the value is close to 1. Obviously, compared to the F1 score of the second model, the first model still has the better performance since the F1 score of the second model is 0.89 which is lowever then the F1 score of the losgistic regression model.
+
+Thirdly, we explore the ROC curve to measure the model performance. According to the ROC Curve of the logistic regresion model, the plot between the sensitivity, which is the true positive fraction (the true "yes" of loan default), and the specificity, which is the false positive fraction, is close the the 0,1 point. The firt model is even better than the second model since based on the ROC curve, the first model seems to have the closer curve to the 0,1 point, which is on top left corner.
+
+The last one, we explore the Area Under the ROC Curve. Respectively, the AU ROC of the Logistic model and the decision tree are shuch the follows:
+
+- logistic regression:
+roc_auc	binary	0.9894598	
+
+- decission tree:
+roc_auc	binary	0.9729595	
+
+The AU ROC, which falls between 0.9 to 1, shows a good model performance. Since the AU ROC for the logistic regresion model is 0.9894598, which is very close to 1, then the model is classified as a very good model. The same as the decission tree model, the both models can be considered as the good model. HOwever, in overall, the logistic regression model is the better model to the classification for the loan default customer based on the given dataset.
+
+According to all the result, I suggest the bank to pay attention more to the customers as the following criterias:
+
+1. The customers who use the loan for credit card and medical purpose
+2. The customers within 5 years term of loan
+3. The customers who have worked for 8 years in the current job
+4. The customers which have the loan amount above 10000
+5. The customers which have installment above 490.00
+6. The customers who live in rent houses
+
+The above criterias shows that the customers have tendency to get the loan default status. Therefore, those kind of customers can be treated by restructring the loan account whether by extending the payment term and reducing the interest rate, or reverting the method of loan payment by paying principle loan amount and followed by interest payment, or vice versa.
